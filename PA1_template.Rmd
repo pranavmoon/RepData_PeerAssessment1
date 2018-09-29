@@ -1,25 +1,122 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+
+##Reproducible Research:Project-1
+
+####The following code downloads and unzip the data file.
+```{r download, echo=TRUE}
+project1url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+filename<-"Rep_activity.zip"
+if(!file.exists(filename)){download.file(project1url,destfile = filename)}
+unzip(filename)
+```
+####Loading and processing the data
+```{r readfile, echo= TRUE}
+  repdata<-read.csv("activity.csv",header = TRUE,sep=",")
+  dim(repdata)
+  names(repdata)
+  str(repdata)
+```
+
+**1. What is mean total number of steps taken per day?**
+
+*For this part of the assignment, you can ignore the missing values in the dataset.*
+
+*1.1 Calculate the total number of steps taken per day.*
+```{r Question1.1, echo=TRUE}
+  step_day<-data.frame(Totalstepsday=with(repdata,tapply(steps,date,sum)),date=levels(repdata$date),row.names = NULL)
+library(dplyr)  
+as_tibble(step_day)
+```
+*1.2 Make a histogram of the total number of steps taken each day.*
+```{r Question1.2, echo=TRUE}
+  with(step_day,hist(Totalstepsday,col="green",xlab="steps",main=" Total steps each day"))
+dev.copy(png,file="step_original_data.png")
+dev.off()
+```
+
+*1.3 Calculate and report the mean and median of the total number of steps taken per day.*
+```{r Question1.3, echo=TRUE}
+print("Mean");with(step_day,mean(Totalstepsday,na.rm=T))
+print("Median");with(step_day,median(Totalstepsday,na.rm=T))  
+```
+The mean and median differ slightly in values.
+
+**2. What is the average daily activity pattern?**
+
+*2.1 Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).*
+```{r Question2.1, echo=TRUE}
+pattern<-data.frame(interval=levels(factor(repdata$interval)),mean=with(repdata,tapply(steps,factor(interval),mean,na.rm=TRUE)),row.names = NULL)
+
+pattern<-transform(pattern,interval=as.integer(as.character(interval)))
+
+with(pattern,plot(interval,mean,type="l",xlab="5-minute Inetrval",ylab="Average number of steps", col="red",main="Time series plot"))
+dev.copy(png,file="activity_pattern.png")
+  dev.off()
+```
+
+*2.2 Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?*
+```{r Question2.2, echo=TRUE}
+with(pattern,interval[which.max(mean)])
+  
+```
+**3. Imputing missing values.**
+
+*3.1 Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NA).*
+```{r Question3.1, echo=TRUE}
+  missing_value<-table(is.na(repdata))
+  print("Total Number of Missing Values:")
+  print(missing_value[2])
+```
+*3.2 Devise a strategy for filling in all of the missing values in the dataset.*
+
+(The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.)
+```{r Question3.2, echo=TRUE}
+  as_tibble(repdata)   #Original data.
+  as_tibble(pattern)   # data with mean for 5-minute interval.
+  steps_na<-which(is.na(repdata$steps))  #index of NA
+  filler<-ifelse(repdata[steps_na,"interval"]==pattern$interval,pattern$mean)
+```
+The missing values are filled/replaced by mean for 5-minute interval.
+
+*3.3 Create a new dataset that is equal to the original dataset but with the missing data filled in.*
+```{r Question3.3, echo=TRUE}
+  rep<-repdata
+  rep[steps_na,"steps"]=filler
+  as_tibble(rep)  # data with NA replaced by mean for 5-minute interval.
+```
+*3.4 Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?*
+```{r Question3.4, echo=TRUE}
+rep_step_day<-data.frame(Totalstepsday=with(rep,tapply(steps,date,sum)),date=levels(rep$date),row.names = NULL)
+
+as_tibble(rep_step_day)
+
+with(rep_step_day,hist(Totalstepsday,col="wheat",xlab="Steps",main=" Total number of steps each day"))
+dev.copy(png,file="step_filled_data.png")
+dev.off()
+summary(rep_step_day)
+```
+The mean and median for new data is same and these values do not vary much from the original data. In fact mean for newdata is integer part of the mean for original one.
+
+**4. Are there differences in activity patterns between weekdays and weekends?**
+(For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.)
 
 
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+*4.1 Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.*
+```{r Question4.1, echo=TRUE}
+  rep_week<-rep%>%as_tibble()%>%mutate(days=weekdays(as.Date(date)))
+  #creating labels of weekday and weekend.
+  week<-data.frame(days=levels(factor(rep_week$days)))
+  week<-mutate(week,num=levels(week$days)<-c(5,1,6,7,4,2,3))
+  week<-mutate(week,week=factor(num<6,labels=c("weekend","weekday")))
+  #adding a column in object rep of weekday or weekend.
+  rep_week<-rep_week%>%as_tibble()%>%mutate(week=factor(days,levels = week$days,labels = week$week))
+  rep_week
+```
+*4.2 Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.*
+```{r Question4.2, echo=TRUE}
+  week_mean<-rep_week%>%group_by(interval,week)%>%summarise(mean=mean(steps,na.rm=TRUE))
+  week_mean
+  library(lattice)
+  xyplot(mean~interval|week,data=week_mean,layout=c(1,2),type="l",lty=1)
+  dev.copy(png,file="steps_weekday_weekend.png")
+  dev.off()
+```
